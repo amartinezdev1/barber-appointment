@@ -1,0 +1,9 @@
+'use client';
+import {useEffect,useRef,type ReactNode} from 'react';
+import {Scissors,X,LoaderCircle} from 'lucide-react';
+export function Logo({name='RITUAL',small=false}:{name?:string;small?:boolean}){return <span className={'brand '+(small?'brand-small':'')}><span className="brand-mark"><Scissors size={19}/></span><span>{name}<small>{name==='RITUAL'?'BARBER PLATFORM':'BARBER CLUB'}</small></span></span>;}
+export function Spinner({label='Cargando…'}:{label?:string}){return <div className="loading" role="status"><LoaderCircle size={22} className="spin"/><span>{label}</span></div>;}
+export function Field({label,children,hint}:{label:string;children:ReactNode;hint?:string}){return <label className="field"><span>{label}</span><span className="field-control">{children}</span>{hint&&<small>{hint}</small>}</label>;}
+export function Modal({title,onClose,children,wide=false}:{title:string;onClose:()=>void;children:ReactNode;wide?:boolean}){const ref=useRef<HTMLDialogElement>(null);useEffect(()=>{ref.current?.showModal();return()=>{ref.current?.close();};},[]);return <dialog ref={ref} className={'modal '+(wide?'modal-wide':'')} onCancel={e=>{e.preventDefault();onClose();}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}><header><div><span className="eyebrow">RITUAL · GESTIÓN</span><h2>{title}</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Cerrar"><X size={20}/></button></header>{children}</dialog>;}
+export function ErrorMessage({message}:{message:string}){return message?<div className="error" role="alert">{message}</div>:null;}
+export function Empty({title,description,children}:{title:string;description:string;children?:ReactNode}){return <div className="empty"><span className="empty-mark"><Scissors size={24}/></span><h3>{title}</h3><p>{description}</p>{children}</div>;}

@@ -1,0 +1,16 @@
+export type Role = 'owner' | 'manager' | 'barber';
+export type BookingStatus = 'confirmed' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type Tenant = { id:string;slug:string;name:string;description:string;tagline:string;accent:string;hero_url:string;timezone:string;status:string;plan:string;transfer_minutes:number;cancel_minutes:number;notice_minutes:number;advance_days:number };
+export type Branch = { id:string;tenant_id:string;name:string;address:string;timezone:string;opens:number;closes:number;closed_days:string;active:number };
+export type Barber = { id:string;tenant_id:string;name:string;bio:string;initials:string;active:number };
+export type Service = { id:string;tenant_id:string;name:string;description:string;minutes:number;price_cents:number;buffer_minutes:number;active:number };
+export type Offering = { tenant_id:string;service_id:string;barber_id?:string;branch_id?:string;minutes:number|null;price_cents:number|null };
+export type Shift = { id:string;tenant_id:string;branch_id:string;barber_id:string;date:string;start_at:number;end_at:number;break_start:number|null;break_end:number|null };
+export type Booking = { id:string;tenant_id:string;branch_id:string;barber_id:string;service_id:string;status:BookingStatus;start_at:number;end_at:number;busy_until:number;client_name:string;client_phone:string;client_email:string;price_cents:number;minutes:number;service_name:string;whatsapp_consent:number;reference:string;manage_hash?:string;created_at:number;version:number };
+export type Membership = { id:string;tenant_id:string;user_id:string;role:Role;branch_ids:string;barber_id:string|null };
+export type Profile = { id:string;email:string;name:string;is_platform_admin:number };
+export type Actor = { profile:Profile;memberships:Membership[] };
+export type PublicData = { tenant:Tenant;branches:Branch[];barbers:Barber[];services:Service[];barberServices:Offering[];branchServices:Offering[];assignments?:{barber_id:string;branch_id:string}[] };
+export type Slot = { start_at:number;end_at:number;busy_until:number;barber_id:string;barber_name:string;minutes:number;price_cents:number };
+export type AdminData = { profile:Profile;tenants:Tenant[];tenant:Tenant;membership:Membership|null;branches:Branch[];barbers:Barber[];services:Service[];shifts:Shift[];bookings:Booking[];barberServices:Offering[];branchServices:Offering[];grants:{id:string;email:string;role:Role;branch_ids:string;barber_id:string|null}[];notifications:{id:string;booking_id:string;status:string;kind:string;due_at:number}[] };
+export const STATUS_LABELS:Record<BookingStatus,string>={confirmed:'Confirmada',arrived:'En espera',in_progress:'Atendiendo',completed:'Completada',cancelled:'Cancelada',no_show:'No asistió'};

@@ -1,0 +1,2 @@
+export async function api<T>(path:string,options:RequestInit={}):Promise<T>{const response=await fetch(path,{credentials:'same-origin',...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...options.headers}});const data=await response.json() as {error?:string};if(!response.ok)throw new Error(data.error||'No se pudo completar la operación.');return data as T;}
+export function post<T>(path:string,data:unknown){return api<T>(path,{method:'POST',body:JSON.stringify(data)});}

@@ -1,0 +1,12 @@
+const DAY=86_400_000;
+export function dateInZone(timestamp:number,timezone:string):string {const p=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(timestamp);const get=(type:string)=>p.find(x=>x.type===type)!.value;return `${get('year')}-${get('month')}-${get('day')}`;}
+export function minuteInZone(timestamp:number,timezone:string):number {const p=new Intl.DateTimeFormat('en-GB',{timeZone:timezone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(timestamp);return Number(p.find(x=>x.type==='hour')!.value)*60+Number(p.find(x=>x.type==='minute')!.value);}
+export function localInstant(date:string,minutes:number,timezone:string):number {if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isInteger(minutes)||minutes<0||minutes>1440)throw new Error('Fecha u hora inválida.');const [y,m,d]=date.split('-').map(Number);const target=Date.UTC(y,m-1,d,Math.floor(minutes/60),minutes%60);if(new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10)!==date)throw new Error('Fecha inválida.');let guess=target;for(let i=0;i<4;i++){const actual=Date.parse(dateInZone(guess,timezone)+'T00:00:00Z')+minuteInZone(guess,timezone)*60_000;const delta=target-actual;if(delta===0)return guess;guess+=delta;}throw new Error('La hora no existe en esta zona horaria.');}
+export function addDays(date:string,n:number):string{return new Date(Date.parse(date+'T12:00:00Z')+n*DAY).toISOString().slice(0,10);}
+export function dayOfWeek(date:string):number{return new Date(date+'T12:00:00Z').getUTCDay();}
+export function formatTime(timestamp:number,timezone='America/Panama'):string{return new Intl.DateTimeFormat('es-PA',{timeZone:timezone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(timestamp);}
+export function formatDate(date:string,options:Intl.DateTimeFormatOptions={weekday:'long',day:'numeric',month:'long'}):string{return new Intl.DateTimeFormat('es-PA',{...options,timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));}
+export function money(cents:number):string{return new Intl.NumberFormat('es-PA',{style:'currency',currency:'USD',currencyDisplay:'narrowSymbol'}).format(cents/100);}
+export function timeString(minutes:number):string{return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;}
+export function parseTime(value:string):number{if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw new Error('Hora inválida.');const [h,m]=value.split(':').map(Number);return h*60+m;}
+export const DAY_MS=DAY;

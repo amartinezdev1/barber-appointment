@@ -1,0 +1,1 @@
+export function accentInk(hex:string):string{const rgb=/^#[a-f0-9]{6}$/i.test(hex)?hex:'#c2ed86';const values=[1,3,5].map(i=>parseInt(rgb.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);const luminance=values[0]*.2126+values[1]*.7152+values[2]*.0722;return luminance>.22?'#18301f':'#ffffff';}
