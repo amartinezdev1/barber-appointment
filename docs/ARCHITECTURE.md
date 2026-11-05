@@ -56,15 +56,11 @@ La portada admite una imagen HTTPS. La galería, carga de archivos, reseñas ver
 
 ## Supabase / Vercel
 
-Esta versión utiliza la infraestructura de Sites para poder probarla sin credenciales externas. **No está conectada a Supabase ni desplegada en Vercel.** El código de dominio y las pantallas son reutilizables, pero un traslado necesita:
+La configuración actual también incluye un destino Vercel independiente, documentado en [VERCEL.md](VERCEL.md): build Next.js, `pg` con pool limitado, migración PostgreSQL en el esquema privado `ritual` y Supabase Auth. Requiere configurar las cuentas y variables; no copia los datos de D1.
 
-1. Convertir `db/schema.ts` y los triggers de SQLite a PostgreSQL. Usar restricciones de exclusión para los intervalos por barbero y conservar las claves compuestas por empresa.
-2. Reemplazar `lib/server/db.ts`, sus operaciones preparadas D1 y las llamadas `batch` por un repositorio transaccional PostgreSQL. No publicar una función RPC que acepte SQL arbitrario.
-3. Sustituir `app/chatgpt-auth.ts` por sesiones verificadas de Supabase Auth y vincularlas a las membresías; configurar RLS y comprobar todos los roles.
-4. Mover las imágenes a Storage si se incorpora carga de archivos. Guardar secretos únicamente en el servidor.
-5. Ejecutar nuevamente las pruebas del dominio y los recorridos de integración; adaptar el despliegue a Next.js/Vercel.
+`lib/server/runtime-context.ts` identifica el Worker de Sites a partir del contexto que establece su entrypoint. Fuera de ese contexto no se confía en encabezados de identidad. El servidor Next.js verifica sesiones de Supabase y usa el adaptador PostgreSQL; el propietario inicial debe coincidir con `RITUAL_OWNER_EMAIL`.
 
-No se deben alojar los endpoints actuales detrás de un proxy genérico que permita a los visitantes inventar encabezados `oai-authenticated-user-*`. El alojamiento Sites proporciona esa frontera de identidad.
+Las migraciones PostgreSQL incluyen restricciones de exclusión y bloqueo por barbero para coordinar reservas y turnos. Las tablas privadas tienen RLS habilitado y no se exponen a las claves del navegador; la aplicación accede desde el backend y comprueba la autorización de cada operación.
 
 ## Archivos principales
 

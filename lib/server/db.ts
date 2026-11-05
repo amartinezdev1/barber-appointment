@@ -1,5 +1,7 @@
-import {env} from 'cloudflare:workers';
-export function database():D1Database{if(!env.DB)throw new Error('La base de datos no está configurada.');return env.DB;}
+import type {Database} from './database-contract';
+import {sitesAdapter} from './runtime-context';
+import {postgresDatabase} from './postgres';
+export function database():Database{return sitesAdapter()??postgresDatabase;}
 export async function rows<T>(sql:string,...params:unknown[]):Promise<T[]>{return(await database().prepare(sql).bind(...params).all<T>()).results;}
 export async function one<T>(sql:string,...params:unknown[]):Promise<T|null>{return database().prepare(sql).bind(...params).first<T>();}
 export async function run(sql:string,...params:unknown[]){return database().prepare(sql).bind(...params).run();}

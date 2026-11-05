@@ -1,5 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import {inSitesRuntime} from '../lib/server/runtime-context';
+import {supabaseConfig,supabaseServer} from '../lib/server/supabase';
 
 export type ChatGPTUser = {
   userId: string;
@@ -19,6 +21,15 @@ const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
+  // Only the Sites worker may trust dispatch-owned identity headers.
+  // Vercel always verifies a Supabase session instead.
+  if(!inSitesRuntime()){
+    if(!supabaseConfig())return null;
+    const {data:{user},error}=await(await supabaseServer()).auth.getUser();
+    if(error||!user?.email||!user.email_confirmed_at)return null;
+    const fullName=typeof user.user_metadata?.full_name==='string'?user.user_metadata.full_name:null;
+    return{userId:user.id,email:user.email,displayName:fullName||user.email,fullName};
+  }
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
@@ -50,12 +61,12 @@ export async function requireChatGPTUser(
 
 export function chatGPTSignInPath(returnTo: string): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  return `${inSitesRuntime()?SIGN_IN_PATH:'/login'}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
-  return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
+  return `${inSitesRuntime()?SIGN_OUT_PATH:'/login'}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
 function safeRelativeReturnPath(value: string): string {

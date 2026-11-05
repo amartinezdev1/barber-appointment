@@ -2,7 +2,9 @@
 
 ## Pruebas automáticas
 
-`npm test` ejecuta 20 pruebas de dominio y SQL: duración, descansos, margen, anticipación, ventanas de reserva, zonas horarias, servicios habilitados, prioridades al elegir cualquier barbero, citas canceladas, traslados, aislamiento entre empresas y permisos por sede/profesional.
+`npm test` ejecuta 27 pruebas de dominio y SQL: duración, descansos, margen, anticipación, ventanas de reserva, zonas horarias, servicios habilitados, prioridades al elegir cualquier barbero, citas canceladas, traslados, aislamiento entre empresas y permisos por sede/profesional.
+
+La adaptación para Vercel añade la aplicación de la migración PostgreSQL real sobre PGlite y verifica su SQL parametrizado, restricciones de exclusión, descansos, traslado y protección de turnos con reservas. Pasan tanto `npm run build:vercel` (Next.js, con `.next/routes-manifest.json`) como `npm run build` (Sites/Vinext). La prueba HTTP del modo Sites también se ejecutó tras incorporar el adaptador y el nuevo contexto de identidad.
 
 Las pruebas SQL cargan la migración real en SQLite, comprueban que la segunda reserva de un intervalo falla y que un turno con citas no puede moverse ni eliminarse. También verifican claves compuestas entre empresas y conservación de precio/duración.
 

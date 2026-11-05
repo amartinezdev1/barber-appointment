@@ -2,12 +2,14 @@ import {getChatGPTUser} from '../../app/chatgpt-auth';
 import {addDays,dateInZone,dayOfWeek,localInstant} from '../dates';
 import {database,hash,one,statement,token} from './db';
 import {assert} from './http';
+import {inSitesRuntime} from './runtime-context';
 export async function initialize(){
  const user=await getChatGPTUser();assert(user,401,'Inicia sesión antes de crear tu espacio.');
+ if(!inSitesRuntime())assert(!!process.env.RITUAL_OWNER_EMAIL&&user.email.toLowerCase()===process.env.RITUAL_OWNER_EMAIL.trim().toLowerCase(),403,'Solo el correo configurado como RITUAL_OWNER_EMAIL puede inicializar la plataforma.');
  const ready=await one('SELECT value FROM app_state WHERE key=?','ready');assert(!ready,409,'El espacio ya está inicializado.');
  await database().batch([statement('INSERT INTO app_state (key,value) VALUES (?,?) ON CONFLICT(key) DO NOTHING','bootstrap_owner',user.userId)]);
  const owner=await one<{value:string}>('SELECT value FROM app_state WHERE key=?','bootstrap_owner');assert(owner?.value===user.userId,403,'Otro administrador está inicializando este espacio.');
- const commands:D1PreparedStatement[]=[];
+ const commands:import('./database-contract').PreparedStatement[]=[];
  const insert=(table:string,row:Record<string,string|number|null>)=>{const keys=Object.keys(row);commands.push(statement(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,...Object.values(row)));};
  insert('profiles',{id:user.userId,email:user.email.toLowerCase(),name:user.displayName,is_platform_admin:1});
  for(const [tenant_id,slug,name] of [['ritual','el-ritual','El Ritual'],['studio','barber-studio','Barber Studio']]){

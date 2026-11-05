@@ -29,7 +29,11 @@ Los datos de ejemplo se crean al inicializar, no durante las migraciones. Los tu
 
 La publicación es privada: no está abierta a clientes externos. Dar un permiso dentro de la aplicación y compartir el sitio son operaciones diferentes. No existen contraseñas universales ni un selector para asumir el rol de otro usuario.
 
-## Desarrollo local
+## Despliegue en Vercel
+
+Consulta [docs/VERCEL.md](docs/VERCEL.md). El proyecto incluye un build Next.js real (`npm run build:vercel`), adaptador PostgreSQL y acceso con Supabase Auth. La migración y `.env.example` están preparados; crea Supabase y configura las variables antes de usar las reservas.
+
+## Desarrollo local con Sites
 
 Requiere Node.js 22.13 o posterior y npm. Se recomienda Node 24 o posterior.
 
@@ -84,7 +88,7 @@ React, TypeScript, convenciones Next.js App Router con Vinext, Cloudflare Worker
 
 - WhatsApp: conectar remitentes de cada empresa, consentimiento, plantillas y procesamiento efectivo de la cola. **No se envía ningún mensaje en esta versión.**
 - Cobro de suscripciones y pagos: los planes son administrativos y no generan cargos.
-- Supabase/Vercel: fueron propuestos como alternativa para producción, pero esta entrega usa Sites/D1 para funcionar sin credenciales externas. El traslado requiere adaptar el repositorio SQL y la identidad; está descrito en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Supabase/Vercel: soporte preparado en [docs/VERCEL.md](docs/VERCEL.md). Falta crear el proyecto de Supabase, aplicar su migración y configurar las variables. La publicación original de Sites continúa utilizando D1.
 - Carga de archivos, galerías y reseñas verificadas no están implementadas. La portada admite una imagen mediante URL HTTPS.
 
 No guardes tokens, contraseñas de proveedores ni credenciales en el código. Mantén las migraciones aplicadas sin cambios y añade migraciones nuevas para cualquier modificación del esquema.
