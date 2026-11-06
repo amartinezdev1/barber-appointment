@@ -20,11 +20,12 @@ const serviceResult=await mutate({action:'saveService',tenant_id:tenant,name:'Co
 const schedule={action:'saveShift',tenant_id:tenant,barber_id:barber,branch_id:branch.id,date,start:'09:00',end:'17:00',break_start:'12:00',break_end:'13:00',repeat_weeks:4};assert.equal((await mutate(schedule)).status,200);
 data=(await getAdmin(tenant)).data;assert.equal(data.shifts.length,4);
 const availabilityPath='/api/availability?'+new URLSearchParams({slug,branch:branch.id,service,date,barber});let slots=(await request(availabilityPath,{user:null})).data.slots;assert(slots.length>0);const first=slots[0];
-const reservation={slug,branch_id:branch.id,service_id:service,barber_id:barber,start_at:first.start_at,client_name:'Cliente integración',client_phone:'+50760000000',client_email:'test@example.invalid',whatsapp_consent:false};
+const reservation={slug,branch_id:branch.id,service_id:service,barber_id:barber,start_at:first.start_at,client_name:'Cliente integración',client_phone:'6123-4567',client_email:'test@example.invalid',whatsapp_consent:false};
 const stale=await request('/api/reservations',{method:'POST',body:{...reservation,expected_price_cents:999},user:null});assert.equal(stale.status,409);assert.match(stale.data.error,/precio/);
 const races=await Promise.all([request('/api/reservations',{method:'POST',body:reservation,user:null}),request('/api/reservations',{method:'POST',body:{...reservation,client_name:'Segundo intento'},user:null})]);assert.deepEqual(races.map(r=>r.status).sort(),[201,409]);const booked=races.find(r=>r.status===201).data,token=booked.manageToken;
 assert.match(token,/^[a-f0-9]{64}$/);
 let managed=await request('/api/booking',{method:'POST',body:{action:'get',token},user:null});assert.equal(managed.status,200);assert.equal(managed.data.booking.price_cents,1500);assert(!('manage_hash' in managed.data.booking));assert(!('client_phone' in managed.data.booking));const bookingId=managed.data.booking.id;
+assert.equal((await getAdmin(tenant)).data.bookings.find(b=>b.id===bookingId).client_phone,'+50761234567','El teléfono local debe guardarse con el prefijo de Panamá.');
 const shift=data.shifts.find(s=>s.date===date);
 const second=await mutate({action:'saveBranch',tenant_id:tenant,name:'Segunda sede',address:'Dirección de prueba',timezone:'America/Panama',opens:540,closes:1140,closed_days:[0],active:true});assert.equal(second.status,200);const branchB=second.data.id;
 const badMove=await mutate({...schedule,id:shift.id,branch_id:branchB,repeat_weeks:1});assert.equal(badMove.status,409);assert.match(badMove.data.error,/citas existentes/);
