@@ -22,3 +22,42 @@ test('la migración PostgreSQL aplica las reglas de reservas y turnos',async t=>
   await t.test('SQL de inicialización y limitador es compatible',async()=>{await db.query(toPostgres('INSERT OR IGNORE INTO app_state (key,value) VALUES (?,?)'),['test','ready']);await db.query(toPostgres('INSERT OR IGNORE INTO app_state (key,value) VALUES (?,?)'),['test','duplicate']);assert.equal((await db.query<{value:string}>(toPostgres('SELECT value FROM app_state WHERE key=?'),['test'])).rows[0].value,'ready');await db.query(toPostgres('INSERT INTO rate_limits (key,window,count) VALUES (?,?,1) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN rate_limits.window=excluded.window THEN rate_limits.count+1 ELSE 1 END,window=excluded.window RETURNING count'),['key',1]);});
  }finally{await db.close();}
 });
+
+
+test('la instalación mantiene las tablas privadas sin depender del search_path de ritual y con RLS automático',async()=>{
+ const db=new PGlite({extensions:{btree_gist}});
+ try{
+  // Exercise the migration without its session SET, as well as a Supabase-style
+  // DDL hook with a different search_path. The private schema must stay explicit.
+  await db.exec(`
+   CREATE FUNCTION public.test_auto_rls() RETURNS event_trigger
+   LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+   DECLARE cmd record;
+   BEGIN
+    FOR cmd IN SELECT * FROM pg_event_trigger_ddl_commands()
+     WHERE command_tag='CREATE TABLE' AND object_type='table'
+    LOOP
+     IF cmd.schema_name='public' THEN
+      EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY',cmd.object_identity);
+     END IF;
+    END LOOP;
+   END;
+   $$;
+   CREATE EVENT TRIGGER test_auto_rls ON ddl_command_end
+    WHEN TAG IN ('CREATE TABLE') EXECUTE FUNCTION public.test_auto_rls();
+   SET search_path=pg_catalog,public,extensions;
+  `);
+  const migration=readFileSync(new URL('../supabase/migrations/202611050001_ritual.sql',import.meta.url),'utf8');
+  await db.exec(migration.replace(/^SET LOCAL search_path=.*;$/m,''));
+  const tables=await db.query<{schema:string;name:string;rls:boolean}>(`
+   SELECT n.nspname AS schema,c.relname AS name,c.relrowsecurity AS rls
+   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+   WHERE c.relkind='r' AND n.nspname IN ('ritual','public') ORDER BY c.relname
+  `);
+  assert.equal(tables.rows.length,15);
+  assert.ok(tables.rows.every(table=>table.schema==='ritual' && table.rls));
+  assert.ok(tables.rows.some(table=>table.name==='app_state'));
+  assert.equal((await db.query<{count:number}>('SELECT count(*)::int AS count FROM ritual.app_state')).rows[0].count,0);
+  assert.equal((await db.query<{count:number}>('SELECT count(*)::int AS count FROM ritual.tenants')).rows[0].count,0);
+ }finally{await db.close();}
+});

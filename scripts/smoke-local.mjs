@@ -47,5 +47,25 @@ assert.equal((await mutate({action:'deleteShift',tenant_id:tenant,id:shift.id}))
 await mutate({action:'setTenantStatus',tenant_id:tenant,status:'suspended',plan:'Esencial'});
 assert.equal((await request('/api/public?slug='+slug,{user:null})).status,404);
 assert.equal((await request('/api/booking',{method:'POST',body:{action:'get',token},user:null})).data.booking.status,'cancelled');
-console.log('HTTP OK: CRUD, cuatro semanas de turnos, reserva concurrente, edición protegida, instantánea de precio, reprogramación, cancelación, alta/revocación de accesos, rechazo de identidad falsificada y empresa suspendida.');
-console.log('Fixture local suspendido:',slug,'· Cita de prueba:',bookingId);
+// Exercise the actual command routing and remove only this run's local fixtures.
+assert.equal((await mutate({action:'deleteService',tenant_id:tenant,id:service})).status,409);
+assert.equal((await mutate({action:'deleteBarber',tenant_id:tenant,id:barber})).status,409);
+assert.equal((await mutate({action:'deleteBranch',tenant_id:tenant,id:branch.id})).status,409);
+assert.equal((await mutate({action:'deleteService',tenant_id:tenant,id:'cabello'})).status,404);
+const withNotices=await request('/api/admin?'+new URLSearchParams({tenant,from:addDays(date,-3),to:addDays(date,28)}));
+const notice=withNotices.data.notifications.find(n=>n.booking_id===bookingId);assert(notice);
+assert.equal((await mutate({action:'deleteNotification',tenant_id:tenant,id:notice.id})).status,200);
+const current=(await getAdmin(tenant)).data.bookings.find(b=>b.id===bookingId);assert(current);
+assert.equal((await mutate({action:'deleteBooking',tenant_id:tenant,id:bookingId,version:current.version+1})).status,409);
+assert.equal((await mutate({action:'deleteBooking',tenant_id:tenant,id:bookingId,version:current.version})).status,200);
+assert.equal((await request('/api/booking',{method:'POST',body:{action:'get',token},user:null})).status,404);
+for(const remaining of (await getAdmin(tenant)).data.shifts)assert.equal((await mutate({action:'deleteShift',tenant_id:tenant,id:remaining.id})).status,200);
+assert.equal((await mutate({action:'deleteService',tenant_id:tenant,id:service})).status,200);
+assert.equal((await mutate({action:'deleteBarber',tenant_id:tenant,id:barber})).status,200);
+assert.equal((await mutate({action:'deleteBranch',tenant_id:tenant,id:branchB})).status,200);
+assert.equal((await mutate({action:'deleteBranch',tenant_id:tenant,id:branch.id})).status,409);
+assert.equal((await mutate({action:'deleteTenant',tenant_id:tenant,confirmation:'incorrecta'})).status,400);
+assert.equal((await mutate({action:'deleteTenant',tenant_id:tenant,confirmation:'Prueba de integración'})).status,200);
+assert.equal((await getAdmin(tenant)).status,404);
+console.log('HTTP OK: reservas, permisos, concurrencia, eliminación de avisos/reservas/turnos/servicios/barberos/sucursales/barberías y protección de dependencias.');
+console.log('Fixture de esta ejecución eliminado:',slug);

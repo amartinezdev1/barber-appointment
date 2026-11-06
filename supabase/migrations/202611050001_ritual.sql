@@ -7,21 +7,23 @@ CREATE SCHEMA IF NOT EXISTS extensions;
 
 CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions;
 
-SET LOCAL search_path=ritual,public,extensions;
+-- Keep ritual out of the session search_path so DDL hooks also see qualified names.
+-- All application DDL below names the private schema explicitly.
+SET LOCAL search_path=pg_catalog,public,extensions;
 
-CREATE TABLE "app_state" (
+CREATE TABLE ritual."app_state" (
 	"key" text PRIMARY KEY NOT NULL,
 	"value" text NOT NULL
 );
 
-CREATE TABLE "profiles" (
+CREATE TABLE ritual."profiles" (
 	"id" text PRIMARY KEY NOT NULL,
 	"email" text NOT NULL,
 	"name" text NOT NULL,
 	"is_platform_admin" bigint DEFAULT 0 NOT NULL
 );
 
-CREATE TABLE "tenants" (
+CREATE TABLE ritual."tenants" (
 	"id" text PRIMARY KEY NOT NULL,
 	"slug" text NOT NULL,
 	"name" text NOT NULL,
@@ -38,9 +40,9 @@ CREATE TABLE "tenants" (
 	"advance_days" bigint DEFAULT 60 NOT NULL
 );
 
-CREATE UNIQUE INDEX "tenants_slug_unique" ON "tenants" ("slug");
+CREATE UNIQUE INDEX "tenants_slug_unique" ON ritual."tenants" ("slug");
 
-CREATE TABLE "branches" (
+CREATE TABLE ritual."branches" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"name" text NOT NULL,
@@ -50,25 +52,25 @@ CREATE TABLE "branches" (
 	"closes" bigint DEFAULT 1140 NOT NULL,
 	"closed_days" text DEFAULT '[0]' NOT NULL,
 	"active" bigint DEFAULT 1 NOT NULL,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "branch_hours" CHECK("branches"."opens" >= 0 AND "branches"."closes" <= 1440 AND "branches"."opens" < "branches"."closes")
 );
 
-CREATE UNIQUE INDEX "branch_tenant_id" ON "branches" ("tenant_id","id");
+CREATE UNIQUE INDEX "branch_tenant_id" ON ritual."branches" ("tenant_id","id");
 
-CREATE TABLE "barbers" (
+CREATE TABLE ritual."barbers" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"name" text NOT NULL,
 	"bio" text DEFAULT '' NOT NULL,
 	"initials" text NOT NULL,
 	"active" bigint DEFAULT 1 NOT NULL,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE UNIQUE INDEX "barber_tenant_id" ON "barbers" ("tenant_id","id");
+CREATE UNIQUE INDEX "barber_tenant_id" ON ritual."barbers" ("tenant_id","id");
 
-CREATE TABLE "services" (
+CREATE TABLE ritual."services" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"name" text NOT NULL,
@@ -77,62 +79,62 @@ CREATE TABLE "services" (
 	"price_cents" bigint NOT NULL,
 	"buffer_minutes" bigint DEFAULT 5 NOT NULL,
 	"active" bigint DEFAULT 1 NOT NULL,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "service_values" CHECK("services"."minutes" >= 5 AND "services"."minutes" <= 480 AND "services"."price_cents" >= 0 AND "services"."buffer_minutes" >= 0)
 );
 
-CREATE UNIQUE INDEX "service_tenant_id" ON "services" ("tenant_id","id");
+CREATE UNIQUE INDEX "service_tenant_id" ON ritual."services" ("tenant_id","id");
 
-CREATE TABLE "memberships" (
+CREATE TABLE ritual."memberships" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"role" text NOT NULL,
 	"branch_ids" text DEFAULT '[]' NOT NULL,
 	"barber_id" text,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("user_id") REFERENCES "profiles"("id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","barber_id") REFERENCES "barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("user_id") REFERENCES ritual."profiles"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","barber_id") REFERENCES ritual."barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE UNIQUE INDEX "membership_user_tenant" ON "memberships" ("tenant_id","user_id");
+CREATE UNIQUE INDEX "membership_user_tenant" ON ritual."memberships" ("tenant_id","user_id");
 
-CREATE TABLE "access_grants" (
+CREATE TABLE ritual."access_grants" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"email" text NOT NULL,
 	"role" text NOT NULL,
 	"branch_ids" text DEFAULT '[]' NOT NULL,
 	"barber_id" text,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","barber_id") REFERENCES "barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","barber_id") REFERENCES ritual."barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE UNIQUE INDEX "grant_tenant_email" ON "access_grants" ("tenant_id","email");
+CREATE UNIQUE INDEX "grant_tenant_email" ON ritual."access_grants" ("tenant_id","email");
 
-CREATE TABLE "branch_services" (
+CREATE TABLE ritual."branch_services" (
 	"tenant_id" text NOT NULL,
 	"branch_id" text NOT NULL,
 	"service_id" text NOT NULL,
 	"minutes" bigint,
 	"price_cents" bigint,
 	PRIMARY KEY("tenant_id", "branch_id", "service_id"),
-	FOREIGN KEY ("tenant_id","branch_id") REFERENCES "branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","service_id") REFERENCES "services"("tenant_id","id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id","branch_id") REFERENCES ritual."branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","service_id") REFERENCES ritual."services"("tenant_id","id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE TABLE "barber_services" (
+CREATE TABLE ritual."barber_services" (
 	"tenant_id" text NOT NULL,
 	"barber_id" text NOT NULL,
 	"service_id" text NOT NULL,
 	"minutes" bigint,
 	"price_cents" bigint,
 	PRIMARY KEY("tenant_id", "barber_id", "service_id"),
-	FOREIGN KEY ("tenant_id","barber_id") REFERENCES "barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","service_id") REFERENCES "services"("tenant_id","id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id","barber_id") REFERENCES ritual."barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","service_id") REFERENCES ritual."services"("tenant_id","id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE TABLE "shifts" (
+CREATE TABLE ritual."shifts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"branch_id" text NOT NULL,
@@ -142,15 +144,15 @@ CREATE TABLE "shifts" (
 	"end_at" bigint NOT NULL,
 	"break_start" bigint,
 	"break_end" bigint,
-	FOREIGN KEY ("tenant_id","branch_id") REFERENCES "branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","barber_id") REFERENCES "barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","branch_id") REFERENCES ritual."branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","barber_id") REFERENCES ritual."barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "shift_window_valid" CHECK("shifts"."start_at" < "shifts"."end_at"),
 	CONSTRAINT "shift_break_valid" CHECK(("shifts"."break_start" IS NULL AND "shifts"."break_end" IS NULL) OR ("shifts"."break_start" IS NOT NULL AND "shifts"."break_end" IS NOT NULL AND "shifts"."break_start" >= "shifts"."start_at" AND "shifts"."break_end" <= "shifts"."end_at" AND "shifts"."break_start" < "shifts"."break_end"))
 );
 
-CREATE INDEX "shift_window" ON "shifts" ("tenant_id","start_at","end_at");
+CREATE INDEX "shift_window" ON ritual."shifts" ("tenant_id","start_at","end_at");
 
-CREATE TABLE "bookings" (
+CREATE TABLE ritual."bookings" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"branch_id" text NOT NULL,
@@ -171,22 +173,22 @@ CREATE TABLE "bookings" (
 	"manage_hash" text NOT NULL,
 	"created_at" bigint NOT NULL,
 	"version" bigint DEFAULT 1 NOT NULL,
-	FOREIGN KEY ("tenant_id","branch_id") REFERENCES "branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","barber_id") REFERENCES "barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("tenant_id","service_id") REFERENCES "services"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","branch_id") REFERENCES ritual."branches"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","barber_id") REFERENCES ritual."barbers"("tenant_id","id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("tenant_id","service_id") REFERENCES ritual."services"("tenant_id","id") ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "booking_window_valid" CHECK("bookings"."start_at" < "bookings"."end_at" AND "bookings"."busy_until" >= "bookings"."end_at"),
 	CONSTRAINT "booking_status_valid" CHECK("bookings"."status" IN ('confirmed','arrived','in_progress','completed','cancelled','no_show'))
 );
 
-CREATE UNIQUE INDEX "bookings_reference_unique" ON "bookings" ("reference");
+CREATE UNIQUE INDEX "bookings_reference_unique" ON ritual."bookings" ("reference");
 
-CREATE UNIQUE INDEX "bookings_manage_hash_unique" ON "bookings" ("manage_hash");
+CREATE UNIQUE INDEX "bookings_manage_hash_unique" ON ritual."bookings" ("manage_hash");
 
-CREATE INDEX "booking_calendar" ON "bookings" ("tenant_id","branch_id","start_at");
+CREATE INDEX "booking_calendar" ON ritual."bookings" ("tenant_id","branch_id","start_at");
 
-CREATE INDEX "booking_barber" ON "bookings" ("tenant_id","barber_id","start_at");
+CREATE INDEX "booking_barber" ON ritual."bookings" ("tenant_id","barber_id","start_at");
 
-CREATE TABLE "notifications" (
+CREATE TABLE ritual."notifications" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text NOT NULL,
 	"booking_id" text NOT NULL,
@@ -194,23 +196,23 @@ CREATE TABLE "notifications" (
 	"status" text DEFAULT 'not_configured' NOT NULL,
 	"due_at" bigint NOT NULL,
 	"created_at" bigint NOT NULL,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY ("booking_id") REFERENCES "bookings"("id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY ("booking_id") REFERENCES ritual."bookings"("id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE UNIQUE INDEX "notification_booking_kind" ON "notifications" ("booking_id","kind");
+CREATE UNIQUE INDEX "notification_booking_kind" ON ritual."notifications" ("booking_id","kind");
 
-CREATE TABLE "audit" (
+CREATE TABLE ritual."audit" (
 	"id" text PRIMARY KEY NOT NULL,
 	"tenant_id" text,
 	"actor_id" text NOT NULL,
 	"action" text NOT NULL,
 	"entity_id" text NOT NULL,
 	"created_at" bigint NOT NULL,
-	FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON UPDATE no action ON DELETE no action
+	FOREIGN KEY ("tenant_id") REFERENCES ritual."tenants"("id") ON UPDATE no action ON DELETE no action
 );
 
-CREATE TABLE "rate_limits" (
+CREATE TABLE ritual."rate_limits" (
 	"key" text PRIMARY KEY NOT NULL,
 	"window" bigint NOT NULL,
 	"count" bigint NOT NULL
