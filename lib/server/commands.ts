@@ -4,7 +4,10 @@ import {addDays,dateInZone,dayOfWeek,localInstant,parseTime} from '../dates';
 import {validateShift} from '../scheduling';
 import {bookingInput,identifier,localDate,name,slug,timezone} from '../validation';
 import {actor,requireBranch,requireManager,requireOwner,tenantContext} from './auth';
-import {database,id,one,rows,statement} from './db';
+import {database,hash,id,one,rows,statement} from './db';
+import {inSitesRuntime} from './runtime-context';
+import {supabaseAdmin,applicationUrl} from './supabase-admin';
+import {invitationRedirect,sendAccessInvitation,type InvitationResult} from '../invitations';
 import {AppError,assert} from './http';
 import {deleteRecord,deletionActions,DeletionError} from './deletions';
 import {createBooking} from './repository';
@@ -13,6 +16,18 @@ const text=z.string().trim().max(1000);
 const hex=z.string().regex(/^#[a-f0-9]{6}$/i,'Color inválido.');
 const url=z.union([z.string().url().refine(s=>s.startsWith('https://'),'Usa una dirección HTTPS.'),z.literal('')]);
 function audit(tenantId:string,actorId:string,action:string,entity:string){return statement('INSERT INTO audit (id,tenant_id,actor_id,action,entity_id,created_at) VALUES (?,?,?,?,?,?)',id(),tenantId,actorId,action,entity,Date.now());}
+async function inviteAccess(tenantId:string,email:string,actorId:string):Promise<InvitationResult>{
+ if(inSitesRuntime())return{sent:false,message:'El acceso quedó registrado. Esta instalación usa el inicio de sesión privado de Sites y no envía invitaciones por Supabase.'};
+ try{
+  const admin=supabaseAdmin(),redirectTo=invitationRedirect(applicationUrl());
+  const key=await hash('invite:'+tenantId+':'+email),window=Math.floor(Date.now()/60000);
+  const result=await database().batch([statement('INSERT INTO rate_limits (key,window,count) VALUES (?,?,1) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN rate_limits.window=excluded.window THEN rate_limits.count+1 ELSE 1 END,window=excluded.window RETURNING count',key,window)]);
+  if(Number((result[0].results[0] as {count:number})?.count)>1)return{sent:false,message:'Espera un minuto antes de reenviar una invitación a este correo.'};
+  const invitation=await sendAccessInvitation(admin,email,redirectTo);
+  if(invitation.sent)await database().batch([audit(tenantId,actorId,'access.invitation_sent',email)]);
+  return invitation;
+ }catch(error){return{sent:false,message:error instanceof AppError?error.message:'No se pudo enviar el correo. Revisa la configuración de invitaciones.'};}
+}
 export async function command(raw:unknown){
  const input=z.object({action:z.string(),tenant_id:identifier.optional()}).passthrough().parse(raw);
  if(input.action==='createTenant'){
@@ -51,7 +66,10 @@ export async function command(raw:unknown){
   const d=z.object({id:identifier,status:z.enum(['confirmed','arrived','in_progress','completed','cancelled','no_show']),version:z.number().int()}).parse(input),booking=await one<Booking>('SELECT * FROM bookings WHERE tenant_id=? AND id=?',t,d.id);assert(booking,404,'Cita no encontrada.');requireBranch(ctx,booking.branch_id,booking.barber_id);const transitions:Record<BookingStatus,BookingStatus[]>={confirmed:['arrived','cancelled','no_show'],arrived:['in_progress','cancelled'],in_progress:['completed','cancelled'],completed:[],cancelled:[],no_show:[]};assert(transitions[booking.status].includes(d.status),409,'Ese cambio de estado no está permitido.');if(ctx.membership?.role==='barber'&&!ctx.user.profile.is_platform_admin)assert(d.status!=='cancelled',403,'La cancelación requiere un administrador.');const result=await database().batch([statement('UPDATE bookings SET status=?,version=version+1 WHERE tenant_id=? AND id=? AND version=?',d.status,t,d.id,d.version),audit(t,actorId,'booking.status_changed',d.id)]);assert(result[0].meta.changes===1,409,'La cita cambió en otra sesión. Actualiza la página.');if(d.status==='cancelled')await database().batch([statement("UPDATE notifications SET status='cancelled' WHERE booking_id=? AND tenant_id=? AND status<>'sent'",d.id,t)]);return{ok:true};
  }
  if(input.action==='grantAccess'){
-  requireOwner(ctx);const d=z.object({email:z.string().email().transform(s=>s.toLowerCase()),role:z.enum(['owner','manager','barber']),branch_ids:z.array(identifier),barber_id:identifier.nullable().default(null)}).parse(input);assert(d.email!==ctx.user.profile.email.toLowerCase()||d.role==='owner',400,'No puedes reducir tus propios permisos.');const branches=await rows<Branch>('SELECT * FROM branches WHERE tenant_id=?',t);assert(d.branch_ids.every(b=>branches.some(x=>x.id===b)),400,'Sucursal inválida.');if(d.role==='manager')assert(d.branch_ids.length>0,400,'Asigna al menos una sucursal al encargado.');if(d.role==='barber')assert(d.barber_id&&await one('SELECT id FROM barbers WHERE tenant_id=? AND id=?',t,d.barber_id),400,'Selecciona el perfil del barbero.');await database().batch([statement('INSERT INTO access_grants (id,tenant_id,email,role,branch_ids,barber_id) VALUES (?,?,?,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET role=excluded.role,branch_ids=excluded.branch_ids,barber_id=excluded.barber_id',id(),t,d.email,d.role,JSON.stringify(d.branch_ids),d.role==='barber'?d.barber_id:null),audit(t,actorId,'access.granted',d.email)]);return{ok:true};
+  requireOwner(ctx);const d=z.object({email:z.string().email().transform(s=>s.toLowerCase()),role:z.enum(['owner','manager','barber']),branch_ids:z.array(identifier),barber_id:identifier.nullable().default(null),send_invite:z.boolean().default(false)}).parse(input);assert(d.email!==ctx.user.profile.email.toLowerCase()||d.role==='owner',400,'No puedes reducir tus propios permisos.');const branches=await rows<Branch>('SELECT * FROM branches WHERE tenant_id=?',t);assert(d.branch_ids.every(b=>branches.some(x=>x.id===b)),400,'Sucursal inválida.');if(d.role==='manager')assert(d.branch_ids.length>0,400,'Asigna al menos una sucursal al encargado.');if(d.role==='barber')assert(d.barber_id&&await one('SELECT id FROM barbers WHERE tenant_id=? AND id=?',t,d.barber_id),400,'Selecciona el perfil del barbero.');await database().batch([statement('INSERT INTO access_grants (id,tenant_id,email,role,branch_ids,barber_id) VALUES (?,?,?,?,?,?) ON CONFLICT(tenant_id,email) DO UPDATE SET role=excluded.role,branch_ids=excluded.branch_ids,barber_id=excluded.barber_id',id(),t,d.email,d.role,JSON.stringify(d.branch_ids),d.role==='barber'?d.barber_id:null),audit(t,actorId,'access.granted',d.email)]);return{ok:true,invitation:d.send_invite?await inviteAccess(t,d.email,actorId):null};
+ }
+ if(input.action==='sendAccessInvitation'){
+  requireOwner(ctx);const d=z.object({id:identifier}).parse(input),grant=await one<{email:string}>('SELECT email FROM access_grants WHERE tenant_id=? AND id=?',t,d.id);assert(grant,404,'Acceso no encontrado.');return{ok:true,invitation:await inviteAccess(t,grant.email,actorId)};
  }
  if(input.action==='revokeAccess'){requireOwner(ctx);const d=z.object({id:identifier}).parse(input),grant=await one<{email:string}>('SELECT email FROM access_grants WHERE tenant_id=? AND id=?',t,d.id);assert(grant,404,'Acceso no encontrado.');assert(grant.email!==ctx.user.profile.email.toLowerCase(),400,'No puedes revocar tu propio acceso.');await database().batch([statement('DELETE FROM memberships WHERE tenant_id=? AND user_id IN (SELECT id FROM profiles WHERE lower(email)=?)',t,grant.email),statement('DELETE FROM access_grants WHERE tenant_id=? AND id=?',t,d.id),audit(t,actorId,'access.revoked',d.id)]);return{ok:true};}
  assert(false,400,'Operación desconocida.');

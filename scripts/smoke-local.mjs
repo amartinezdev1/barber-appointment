@@ -28,7 +28,7 @@ let managed=await request('/api/booking',{method:'POST',body:{action:'get',token
 const shift=data.shifts.find(s=>s.date===date);
 const second=await mutate({action:'saveBranch',tenant_id:tenant,name:'Segunda sede',address:'Dirección de prueba',timezone:'America/Panama',opens:540,closes:1140,closed_days:[0],active:true});assert.equal(second.status,200);const branchB=second.data.id;
 const badMove=await mutate({...schedule,id:shift.id,branch_id:branchB,repeat_weeks:1});assert.equal(badMove.status,409);assert.match(badMove.data.error,/citas existentes/);
-const repriced=await mutate({action:'saveService',tenant_id:tenant,id:service,name:'Corte de prueba',description:'Nuevo catálogo',minutes:45,price_cents:2200,buffer_minutes:5,active:true,branch_ids:[branch.id,branchB],barber_ids:[barber]});assert.equal(repriced.status,200);managed=await request('/api/booking',{method:'POST',body:{action:'get',token},user:null});assert.equal(managed.data.booking.price_cents,1500);assert.equal(managed.data.booking.minutes,30);
+const repriced=await mutate({action:'saveService',tenant_id:tenant,id:service,name:'Corte de prueba',description:'Corte de cabello\nLavado y secado\nPerfilado de barba',minutes:45,price_cents:2200,buffer_minutes:5,active:true,branch_ids:[branch.id,branchB],barber_ids:[barber]});assert.equal(repriced.status,200);const publicCatalog=await request('/api/public?slug='+slug,{user:null});assert.equal(publicCatalog.data.services.find(s=>s.id===service).description,'Corte de cabello\nLavado y secado\nPerfilado de barba');managed=await request('/api/booking',{method:'POST',body:{action:'get',token},user:null});assert.equal(managed.data.booking.price_cents,1500);assert.equal(managed.data.booking.minutes,30);
 slots=(await request(availabilityPath,{user:null})).data.slots;const later=slots.find(s=>s.start_at>first.start_at+4*3600000);assert(later);
 const moved=await request('/api/booking',{method:'POST',user:null,body:{action:'reschedule',token,branch_id:branch.id,service_id:service,barber_id:barber,start_at:later.start_at}});assert.equal(moved.status,200,JSON.stringify(moved.data));assert.equal(moved.data.booking.start_at,later.start_at);assert.equal(moved.data.booking.price_cents,2200);
 assert((await request(availabilityPath,{user:null})).data.slots.some(s=>s.start_at===first.start_at));
@@ -37,9 +37,15 @@ assert((await request(availabilityPath,{user:null})).data.slots.some(s=>s.start_
 const managerEmail='manager-'+tenant+'@example.invalid';
 assert.equal((await mutate({action:'grantAccess',tenant_id:tenant,email:managerEmail,role:'manager',branch_ids:[branch.id],barber_id:null})).status,200);
 const grants=(await getAdmin(tenant)).data.grants;const grant=grants.find(g=>g.email===managerEmail);assert.equal(grant.role,'manager');
+const invitation=await mutate({action:'sendAccessInvitation',tenant_id:tenant,id:grant.id});assert.equal(invitation.status,200);assert.equal(invitation.data.invitation.sent,false);assert.match(invitation.data.invitation.message,/Sites/);
+assert.equal((await mutate({action:'sendAccessInvitation',tenant_id:tenant,id:'foreign-grant'})).status,404);
 assert.equal((await mutate({action:'revokeAccess',tenant_id:tenant,id:grant.id})).status,200);
 assert(!(await getAdmin(tenant)).data.grants.some(g=>g.id===grant.id));
 assert.equal((await request('/api/admin',{user:null})).status,401);
+const coverForm=new FormData();coverForm.set('payload',JSON.stringify({action:'saveTenant',tenant_id:tenant}));coverForm.set('file',new File([new Uint8Array([255,216,255])],'fixture.jpg',{type:'image/jpeg'}));
+assert.equal((await fetch(origin+'/api/admin/cover',{method:'POST',headers:{Origin:origin},body:coverForm})).status,401);
+assert.equal((await fetch(origin+'/api/admin/cover',{method:'POST',headers:{Origin:'https://untrusted.example'},body:coverForm})).status,403);
+
 const forged=await fetch(origin+'/api/admin',{headers:{'oai-authenticated-user-id':owner.id,'oai-authenticated-user-email':owner.email}});assert.equal(forged.status,401,'El servidor debe descartar encabezados de identidad enviados por el cliente.');
 assert.equal((await request('/api/availability?'+new URLSearchParams({slug,branch:'centro',service,date}),{user:null})).status,404);
 assert.equal((await request('/api/booking',{method:'POST',body:{action:'get',token:'a'.repeat(64)},user:null})).status,404);
